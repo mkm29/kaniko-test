@@ -2,7 +2,16 @@
 
 ## Overview
 
-This repository consists of a simple nginx [Dockerfile](./dockerfile) and [build](./build.sh) script to test building and pushing using Kaniko. 
+This repository consists of a simple nginx [Dockerfile](./dockerfile) and [build](./build.sh) script to test building and pushing using Kaniko.
+
+## Kaniko Status
+
+Kaniko is a tool to build container images from a Dockerfile, inside a container or Kubernetes cluster. It does not depend on a Docker daemon and executes each command within a Dockerfile completely in userspace. Kaniko is designed to run in environments that cannot run a Docker daemon, such as a standard Kubernetes cluster.
+
+> [!IMPORTANT]
+> The Kaniko project used to be maintained by Google, but was archived in June of 2025. Luckily, Chainguard forked the project and is actively maintaining it.
+
+The [Chainguard fork of Kaniko](https://github.com/chainguard-forks/kaniko) is actively maintained, however, you need to build and host your own kaniko images. More information can be found in the [Kaniko development documentation](https://github.com/chainguard-forks/kaniko/blob/main/DEVELOPMENT.md).
 
 ## Podman
 
@@ -49,4 +58,100 @@ By default, Podman will map container UID/GID's to that of the user (UID/GID) ru
 
 Starting in Kubernetes `v1.30` the option to run workloads in User Namespaces was added. This feature essentially isolates workloads running in Kubernetes from the host. You can read more about this feature in the [Kubernetes User Namespaces documentation](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/).
 
-*TODO*: Add instructions for building/pushing images in Kubernetes using GitLab Runner Kubernetes executor.
+### Pod Security Standards (PSS)
+
+Kubernetes Pod Security Standards (PSS) define three levels of security controls for pods: `restricted`, `baseline`, and `privileged`. Each level has specific requirements regarding permissions and capabilities. Here's a summary of how each level handles root access, capabilities, and privileged mode:
+
+| Level | Allows Root | Allows Capabilities | Allows Privileged |
+| --- | --- | --- | --- |
+| restricted| ❌ | ❌ | ❌ |
+| baseline | ✅ | Some | ❌ |
+| privileged | ✅ | ✅ | ✅ |
+
+> [!NOTE]
+> Read more at the official Kubernetes documentation for [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/).
+
+#### Catch
+
+PSS "Restricted" checks `runAsNonRoot: true` at the spec level - it doesn't understand user namespaces. So even with `hostUsers: false`, you may still fail admission if your namespace enforces "Restricted". You'd need either:
+
+- A namespace with "Baseline" enforcement
+- A policy exception for hostUsers: false pods
+- A custom admission policy (Kyverno/Gatekeeper) that allows root when hostUsers: false
+
+#### Examples
+
+Example Pod:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kaniko-build
+spec:
+  hostUsers: false
+  containers:
+    - name: kaniko
+      image: docker.io/smigula/kaniko-executor:latest
+      args:
+        - --context=/workspace
+        - --dockerfile=Dockerfile
+        - --no-push
+        - --tarPath=/workspace/image.tar
+        - --destination=test-image:latest
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+  volumes:
+    - name: workspace
+      emptyDir: {}
+```
+
+Example GitLab Runner:
+
+- gitlab-runner configuration for user namespace kaniko builder:
+
+```yaml
+runners:
+  config: |
+    [[runners]]
+      name = "kaniko-runner"
+      executor = "kubernetes"
+      [runners.kubernetes]
+        namespace = "gitlab-runner"
+        image = "docker.io/smigula/kaniko-executor:latest"
+        pod_security_context = { host_users = false }
+
+        build_container_security_context = {
+          allow_privilege_escalation = false,
+          capabilities = { drop = ["ALL"] }
+        }
+
+        # auth config for registry
+        [[runners.kubernetes.volumes.secret]]
+          name = "docker-config"
+          mount_path = "/kaniko/.docker"
+          secret_name = "kaniko-docker-config"
+          read_only = true
+```
+
+- GitLab CI/CD configuration for building and pushing Docker images using Kaniko:
+
+```yaml
+stages:
+  - build
+build:
+  stage: build
+  image:
+    name: docker.io/smigula/kaniko-executor:latest
+    entrypoint: [""]
+  script:
+    - /kaniko/executor
+      --context=$CI_PROJECT_DIR
+      --dockerfile=$CI_PROJECT_DIR/Dockerfile
+      --destination=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+```
