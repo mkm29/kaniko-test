@@ -34,3 +34,17 @@ podman run --rm -p 8080:8080 docker.io/$DOCKER_HUB_USERNAME/kaniko-nginx:$TAG
 ```
 
 You should now be able to access the nginx welcome page at [http://localhost:8080](http://localhost:8080).
+
+## Permissions
+
+By default, Podman will map container UID/GID's to that of the user (UID/GID) running on the host machine. However, in order to prevent privilege escalation (acquiring more permissions), you must add the `--security-opt=no-new-privileges` flag. Moreover, you should drop all Linux capablities with the flag `--cap-drop=ALL` and add only those that are required. Here is a breakdown of the capabilities needed:
+
+| Capability | Purpose| Justification |
+| --- | --- | --- |
+| `CAP_CHOWN` | Change file owner/group | Preserve ownership when extracting base image layers |
+| `CAP_FOWNER` | Bypass permission checks based on file ownership | Modify files regardless of who owns them |
+| `CAP_DAC_OVERRIDE` | Bypass read/write/execute permission checks | Access files with restrictive permissions in layers |
+
+## Kubernetes
+
+*TODO*: Add instructions for building/pushing images in Kubernetes using GitLab Runner Kubernetes executor.
