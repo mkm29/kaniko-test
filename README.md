@@ -47,4 +47,6 @@ By default, Podman will map container UID/GID's to that of the user (UID/GID) ru
 
 ## Kubernetes
 
+Starting in Kubernetes `v1.30` the option to run workloads in User Namespaces was added. This feature essentially isolates workloads running in Kubernetes from the host. You can read more about this feature in the [Kubernetes User Namespaces documentation](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/).
+
 *TODO*: Add instructions for building/pushing images in Kubernetes using GitLab Runner Kubernetes executor.
