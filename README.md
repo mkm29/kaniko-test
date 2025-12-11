@@ -12,7 +12,7 @@ This example uses Podman to run Kaniko in a rootless environment. In order to em
 podman machine init --cpus 8 --disk-size 50 --memory 32768 --now podman-machine-rootless
 ```
 
-> [!NOTE] By excluding the --rootful flag above a rootless Podman machine is created
+> *NOTE*: By excluding the `--rootful` flag above a rootless Podman machine is created
 
 Create a [Personal Access Token](https://hub.docker.com/settings/security) in Docker Hub in order to be able to push the image. If you export the environment variables `DOCKER_HUB_USERNAME` and `DOCKER_HUB_KANIKO_PAT` the script will use these, otherwise, the script will prompt you for this information, as well as image name and tag (with sensible defaults).
 
